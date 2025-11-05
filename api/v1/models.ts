@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     logger.info('Fetching available models');
 
-    const providers = config.getProviders();
+    const providers = await config.getProviders();
     const modelsSet = new Set<string>();
 
     for (const provider of providers) {

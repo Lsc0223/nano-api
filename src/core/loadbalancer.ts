@@ -6,8 +6,8 @@ import logger from '../utils/logger';
 export class LoadBalancer {
   private counters: Map<string, number> = new Map();
 
-  selectProvider(model: string): ProviderConfig | null {
-    const providers = config.getProvidersForModel(model);
+  async selectProvider(model: string): Promise<ProviderConfig | null> {
+    const providers = await config.getProvidersForModel(model);
     
     if (providers.length === 0) {
       logger.error(`No providers available for model: ${model}`);
@@ -46,8 +46,8 @@ export class LoadBalancer {
     return providers[providers.length - 1];
   }
 
-  selectNextProvider(model: string, excludeProviders: string[]): ProviderConfig | null {
-    const providers = config.getProvidersForModel(model);
+  async selectNextProvider(model: string, excludeProviders: string[]): Promise<ProviderConfig | null> {
+    const providers = await config.getProvidersForModel(model);
     
     const availableProviders = providers.filter(p => {
       if (excludeProviders.includes(p.name)) return false;
@@ -64,8 +64,8 @@ export class LoadBalancer {
     return selected;
   }
 
-  getAllProvidersForModel(model: string): ProviderConfig[] {
-    return config.getProvidersForModel(model);
+  async getAllProvidersForModel(model: string): Promise<ProviderConfig[]> {
+    return await config.getProvidersForModel(model);
   }
 }
 

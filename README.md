@@ -6,6 +6,7 @@
 
 - **无前端** - 纯环境变量配置 API 渠道
 - **多提供商支持** - 支持 OpenAI、Anthropic、Gemini、Vertex AI、Azure、AWS、xAI、Cohere、Groq、Cloudflare、OpenRouter、302.AI 等
+- **自动获取模型** - 配置代理地址和密钥后，自动从供应商获取可用模型列表
 - **统一格式** - 所有响应统一转换为 OpenAI 格式
 - **负载均衡** - 支持权重配置的负载均衡
 - **自动重试** - API 渠道失败时自动切换到下一个可用渠道
@@ -152,6 +153,43 @@ OPENAI_2_API_KEY=sk-account-3
 OPENAI_2_MODELS=gpt-3.5-turbo
 OPENAI_2_WEIGHT=1
 ```
+
+### 自动获取模型列表
+
+**新功能！** 当配置了供应商的 API 密钥和代理地址（BASE_URL）后，如果不设置 `MODELS` 变量或将其留空，系统会自动从供应商 API 获取可用模型列表。
+
+#### 使用示例
+
+```env
+# 自动获取 OpenAI 模型（使用默认端点）
+OPENAI_API_KEY=sk-...
+# 不设置 OPENAI_MODELS，系统会自动获取
+
+# 自动获取第三方代理的模型
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+# 不设置 OPENROUTER_MODELS，系统会自动获取
+
+# 自动获取 Gemini 模型
+GEMINI_API_KEY=...
+# 不设置 GEMINI_MODELS，系统会自动获取
+```
+
+#### 支持的供应商
+
+- **OpenAI 兼容供应商**：openai, groq, openrouter, 302ai, xai, azure
+  - 使用标准的 `/v1/models` 端点
+- **Gemini**：使用 Google Models API
+- **Cohere**：使用 Cohere Models API
+- **Anthropic**：使用预定义的模型列表（因为没有官方模型 API）
+- **Cloudflare**：需要配置 `CLOUDFLARE_PROJECT_ID`
+
+#### 注意事项
+
+1. 自动获取模型功能在应用启动时执行
+2. 如果获取失败，系统会记录警告，该供应商将被跳过
+3. 对于没有默认端点的供应商（如 Azure），必须配置 `BASE_URL`
+4. AWS Bedrock 和 Vertex AI 由于复杂的认证机制，暂不支持自动获取
 
 ### 网关设置
 
