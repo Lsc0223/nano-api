@@ -31,7 +31,7 @@ export class OpenAIProvider extends BaseProvider {
         throw error;
       }
 
-      return await response.json();
+      return await response.json() as ChatCompletionResponse;
     } catch (error) {
       return this.handleError(error);
     }
@@ -69,7 +69,7 @@ export class OpenAIProvider extends BaseProvider {
         throw error;
       }
 
-      return await response.json();
+      return await response.json() as ImageGenerationResponse;
     } catch (error) {
       return this.handleError(error);
     }

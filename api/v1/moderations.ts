@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw error;
     }
 
-    const data: ModerationResponse = await response.json();
+    const data = await response.json() as ModerationResponse;
 
     const rateLimitInfo = rateLimiter.getRateLimitInfo(apiKey);
     res.setHeader('X-RateLimit-Limit', rateLimitInfo.limit.toString());

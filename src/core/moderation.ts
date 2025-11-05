@@ -50,7 +50,7 @@ export class ModerationManager {
         return { flagged: false };
       }
 
-      const data: ModerationResponse = await response.json();
+      const data = await response.json() as ModerationResponse;
       
       if (data.results && data.results.length > 0) {
         const result = data.results[0];
@@ -101,7 +101,7 @@ export class ModerationManager {
         return { flagged: false };
       }
 
-      const data: ModerationResponse = await response.json();
+      const data = await response.json() as ModerationResponse;
       
       if (data.results && data.results.length > 0) {
         const result = data.results[0];

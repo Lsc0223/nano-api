@@ -20,8 +20,8 @@ export class RetryManager {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const provider = attempt === 0
-          ? loadBalancer.selectProvider(request.model)
-          : loadBalancer.selectNextProvider(request.model, triedProviders);
+          ? await loadBalancer.selectProvider(request.model)
+          : await loadBalancer.selectNextProvider(request.model, triedProviders);
 
         if (!provider) {
           if (attempt === 0) {
@@ -34,7 +34,7 @@ export class RetryManager {
         logger.info(`Attempt ${attempt + 1}/${maxRetries + 1} using provider: ${provider.name}`);
 
         const providerInstance = this.createProviderInstance(provider);
-        const timeout = config.getTimeoutForModel(request.model);
+        const timeout = await config.getTimeoutForModel(request.model);
 
         const result = await Promise.race([
           this.executeOperation(providerInstance, operation, request),
