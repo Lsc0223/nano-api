@@ -18,26 +18,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     logger.debug(`Received ${req.method} request to /v1/models`);
 
     const apiKey = authManager.validateApiKey(req.headers.authorization);
-    if (!apiKey) {
-      logger.warn('Models endpoint: Missing or invalid API key');
-      return res.status(401).json({
-        error: {
-          message: 'Missing or invalid API key. Please provide a valid API key in the Authorization header.',
-          type: 'invalid_request_error',
-        },
-      });
-    }
-
-    logger.debug(`Validating rate limit for API key: ${apiKey.substring(0, 8)}...`);
-    const canProceed = await rateLimiter.checkRateLimit(apiKey);
-    if (!canProceed) {
-      logger.warn(`Rate limit exceeded for API key: ${apiKey.substring(0, 8)}...`);
-      return res.status(429).json({
-        error: {
-          message: 'Rate limit exceeded',
-          type: 'rate_limit_error',
-        },
-      });
+    
+    // If API key is provided, validate rate limit
+    if (apiKey) {
+      logger.debug(`Validating rate limit for API key: ${apiKey.substring(0, 8)}...`);
+      const canProceed = await rateLimiter.checkRateLimit(apiKey);
+      if (!canProceed) {
+        logger.warn(`Rate limit exceeded for API key: ${apiKey.substring(0, 8)}...`);
+        return res.status(429).json({
+          error: {
+            message: 'Rate limit exceeded',
+            type: 'rate_limit_error',
+          },
+        });
+      }
+    } else {
+      logger.debug('No API key provided - allowing unauthenticated access for dialog tools');
     }
 
     logger.debug('Fetching available models from providers');
@@ -60,13 +56,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       for (const model of provider.models) {
-        if (authManager.validateModelAccess(apiKey, model)) {
+        // If no API key, return all models; otherwise only return accessible models
+        if (!apiKey || authManager.validateModelAccess(apiKey, model)) {
           modelsSet.add(model);
         }
       }
     }
 
-    logger.debug(`Found ${modelsSet.size} models available for this API key`);
+    logger.debug(`Found ${modelsSet.size} models available`);
 
     const models = Array.from(modelsSet)
       .sort()
@@ -93,10 +90,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ],
       }));
 
-    const rateLimitInfo = rateLimiter.getRateLimitInfo(apiKey);
-    res.setHeader('X-RateLimit-Limit', rateLimitInfo.limit.toString());
-    res.setHeader('X-RateLimit-Remaining', rateLimitInfo.remaining.toString());
-    res.setHeader('X-RateLimit-Reset', Math.floor(rateLimitInfo.reset / 1000).toString());
+    // Only add rate limit headers if API key was provided
+    if (apiKey) {
+      const rateLimitInfo = rateLimiter.getRateLimitInfo(apiKey);
+      res.setHeader('X-RateLimit-Limit', rateLimitInfo.limit.toString());
+      res.setHeader('X-RateLimit-Remaining', rateLimitInfo.remaining.toString());
+      res.setHeader('X-RateLimit-Reset', Math.floor(rateLimitInfo.reset / 1000).toString());
+    }
 
     if (req.method === 'HEAD') {
       return res.status(200).end();

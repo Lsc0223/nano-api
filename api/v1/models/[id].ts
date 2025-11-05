@@ -28,40 +28,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     logger.debug(`Received GET request for model: ${id}`);
 
     const apiKey = authManager.validateApiKey(req.headers.authorization);
-    if (!apiKey) {
-      logger.warn('Model detail endpoint: Missing or invalid API key');
-      return res.status(401).json({
-        error: {
-          message: 'Missing or invalid API key. Please provide a valid API key in the Authorization header.',
-          type: 'invalid_request_error',
-        },
-      });
-    }
-
-    logger.debug(`Validating rate limit for API key: ${apiKey.substring(0, 8)}...`);
-    const canProceed = await rateLimiter.checkRateLimit(apiKey);
-    if (!canProceed) {
-      logger.warn(`Rate limit exceeded for API key: ${apiKey.substring(0, 8)}...`);
-      return res.status(429).json({
-        error: {
-          message: 'Rate limit exceeded',
-          type: 'rate_limit_error',
-        },
-      });
+    
+    // If API key is provided, validate rate limit
+    if (apiKey) {
+      logger.debug(`Validating rate limit for API key: ${apiKey.substring(0, 8)}...`);
+      const canProceed = await rateLimiter.checkRateLimit(apiKey);
+      if (!canProceed) {
+        logger.warn(`Rate limit exceeded for API key: ${apiKey.substring(0, 8)}...`);
+        return res.status(429).json({
+          error: {
+            message: 'Rate limit exceeded',
+            type: 'rate_limit_error',
+          },
+        });
+      }
+    } else {
+      logger.debug('No API key provided - allowing unauthenticated access for dialog tools');
     }
 
     logger.debug(`Fetching model information for: ${id}`);
 
-    // Check if API key has access to this model
-    const hasAccess = authManager.validateModelAccess(apiKey, id);
-    if (!hasAccess) {
-      logger.warn(`API key does not have access to model: ${id}`);
-      return res.status(403).json({
-        error: {
-          message: `You do not have access to model: ${id}`,
-          type: 'permission_error',
-        },
-      });
+    // Check if API key has access to this model (if API key is provided)
+    if (apiKey) {
+      const hasAccess = authManager.validateModelAccess(apiKey, id);
+      if (!hasAccess) {
+        logger.warn(`API key does not have access to model: ${id}`);
+        return res.status(403).json({
+          error: {
+            message: `You do not have access to model: ${id}`,
+            type: 'permission_error',
+          },
+        });
+      }
     }
 
     // Verify model exists in any provider
@@ -84,10 +82,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const rateLimitInfo = rateLimiter.getRateLimitInfo(apiKey);
-    res.setHeader('X-RateLimit-Limit', rateLimitInfo.limit.toString());
-    res.setHeader('X-RateLimit-Remaining', rateLimitInfo.remaining.toString());
-    res.setHeader('X-RateLimit-Reset', Math.floor(rateLimitInfo.reset / 1000).toString());
+    // Only add rate limit headers if API key was provided
+    if (apiKey) {
+      const rateLimitInfo = rateLimiter.getRateLimitInfo(apiKey);
+      res.setHeader('X-RateLimit-Limit', rateLimitInfo.limit.toString());
+      res.setHeader('X-RateLimit-Remaining', rateLimitInfo.remaining.toString());
+      res.setHeader('X-RateLimit-Reset', Math.floor(rateLimitInfo.reset / 1000).toString());
+    }
 
     logger.info(`Returning details for model: ${id}`);
     return res.status(200).json({
