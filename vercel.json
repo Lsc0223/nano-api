@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/**/*.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/v1/chat/completions",
+      "dest": "/api/v1/chat/completions"
+    },
+    {
+      "src": "/v1/images/generations",
+      "dest": "/api/v1/images/generations"
+    },
+    {
+      "src": "/v1/audio/transcriptions",
+      "dest": "/api/v1/audio/transcriptions"
+    },
+    {
+      "src": "/v1/moderations",
+      "dest": "/api/v1/moderations"
+    },
+    {
+      "src": "/v1/models",
+      "dest": "/api/v1/models"
+    }
+  ]
+}
