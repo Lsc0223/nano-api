@@ -5,18 +5,33 @@ import config from '../../src/utils/config';
 import logger from '../../src/utils/logger';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: { message: 'Method not allowed', type: 'invalid_request_error' } });
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return res.status(405).json({
+      error: {
+        message: 'Method not allowed. Use GET to list models.',
+        type: 'invalid_request_error',
+      },
+    });
   }
 
   try {
+    logger.debug(`Received ${req.method} request to /v1/models`);
+
     const apiKey = authManager.validateApiKey(req.headers.authorization);
     if (!apiKey) {
-      return res.status(401).json({ error: { message: 'Invalid API key', type: 'invalid_request_error' } });
+      logger.warn('Models endpoint: Missing or invalid API key');
+      return res.status(401).json({
+        error: {
+          message: 'Missing or invalid API key. Please provide a valid API key in the Authorization header.',
+          type: 'invalid_request_error',
+        },
+      });
     }
 
+    logger.debug(`Validating rate limit for API key: ${apiKey.substring(0, 8)}...`);
     const canProceed = await rateLimiter.checkRateLimit(apiKey);
     if (!canProceed) {
+      logger.warn(`Rate limit exceeded for API key: ${apiKey.substring(0, 8)}...`);
       return res.status(429).json({
         error: {
           message: 'Rate limit exceeded',
@@ -25,41 +40,79 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    logger.info('Fetching available models');
+    logger.debug('Fetching available models from providers');
 
     const providers = await config.getProviders();
-    const modelsSet = new Set<string>();
-
-    for (const provider of providers) {
-      provider.models.forEach(model => {
-        if (authManager.validateModelAccess(apiKey, model)) {
-          modelsSet.add(model);
-        }
+    if (!providers || providers.length === 0) {
+      logger.warn('No providers configured');
+      return res.status(200).json({
+        object: 'list',
+        data: [],
       });
     }
 
-    const models = Array.from(modelsSet).map(modelId => ({
-      id: modelId,
-      object: 'model',
-      created: Math.floor(Date.now() / 1000),
-      owned_by: 'unified-api',
-    }));
+    const modelsSet = new Set<string>();
+
+    for (const provider of providers) {
+      if (!provider.models || provider.models.length === 0) {
+        logger.debug(`Provider ${provider.name} has no models`);
+        continue;
+      }
+
+      for (const model of provider.models) {
+        if (authManager.validateModelAccess(apiKey, model)) {
+          modelsSet.add(model);
+        }
+      }
+    }
+
+    logger.debug(`Found ${modelsSet.size} models available for this API key`);
+
+    const models = Array.from(modelsSet)
+      .sort()
+      .map(modelId => ({
+        id: modelId,
+        object: 'model',
+        created: Math.floor(Date.now() / 1000),
+        owned_by: 'unified-api',
+        permission: [
+          {
+            id: `modelperm-${Date.now()}`,
+            object: 'model_permission',
+            created: Math.floor(Date.now() / 1000),
+            allow_create_engine: false,
+            allow_sampling: true,
+            allow_logprobs: true,
+            allow_search_indices: false,
+            allow_view: true,
+            allow_fine_tuning: false,
+            organization: '*',
+            group_id: null,
+            is_blocking: false,
+          },
+        ],
+      }));
 
     const rateLimitInfo = rateLimiter.getRateLimitInfo(apiKey);
     res.setHeader('X-RateLimit-Limit', rateLimitInfo.limit.toString());
     res.setHeader('X-RateLimit-Remaining', rateLimitInfo.remaining.toString());
     res.setHeader('X-RateLimit-Reset', Math.floor(rateLimitInfo.reset / 1000).toString());
 
+    if (req.method === 'HEAD') {
+      return res.status(200).end();
+    }
+
+    logger.info(`Returning ${models.length} models to client`);
     return res.status(200).json({
       object: 'list',
       data: models,
     });
   } catch (error: any) {
-    logger.error('Models list error:', error);
+    logger.error('Models endpoint error:', error);
 
     return res.status(500).json({
       error: {
-        message: 'Internal server error',
+        message: 'Internal server error while fetching models',
         type: 'internal_error',
       },
     });
