@@ -6,6 +6,7 @@
 
 - **无前端** - 纯环境变量配置 API 渠道
 - **多提供商支持** - 支持 OpenAI、Anthropic、Gemini、Vertex AI、Azure、AWS、xAI、Cohere、Groq、Cloudflare、OpenRouter、302.AI 等
+- **通用 OpenAI 兼容** - 支持任何 OpenAI 兼容格式的提供商，只需 `{PROVIDER}_API_KEY` 和 `{PROVIDER}_BASE_URL`
 - **自动获取模型** - 配置代理地址和密钥后，自动从供应商获取可用模型列表
 - **统一格式** - 所有响应统一转换为 OpenAI 格式
 - **负载均衡** - 支持权重配置的负载均衡
@@ -135,6 +136,64 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 #### 其他提供商
 
 支持 xAI、Cloudflare、Azure、Cohere、AWS Bedrock、Vertex AI 等，详见 `.env.example`。
+
+#### 通用 OpenAI 兼容提供商
+
+**灵活配置！** 系统支持任何使用 OpenAI 兼容 API 格式的提供商。只需提供 `{PROVIDER_NAME}_API_KEY` 和 `{PROVIDER_NAME}_BASE_URL` 两个环境变量，即可自动使用 OpenAI 兼容格式请求该提供商。
+
+##### 使用方法
+
+```env
+# 配置任意名称的 OpenAI 兼容提供商
+CUSTOM_API_KEY=sk-...
+CUSTOM_BASE_URL=https://your-openai-compatible-api.com/v1
+
+# 如果不指定 MODELS，系统会自动从 /v1/models 端点获取可用模型
+# 或者手动指定模型列表
+CUSTOM_MODELS=model1,model2,model3
+
+# 可选的配置参数
+CUSTOM_WEIGHT=1
+CUSTOM_TIMEOUT=120000
+CUSTOM_ENABLED=true
+```
+
+##### 示例
+
+1. **本地 LLM 服务**（如 Ollama、LocalAI）：
+
+```env
+LOCAL_LLM_API_KEY=not-needed
+LOCAL_LLM_BASE_URL=http://localhost:8000/v1
+LOCAL_LLM_MODELS=llama2,mistral
+```
+
+2. **私有部署的 OpenAI 兼容服务**：
+
+```env
+PRIVATE_API_KEY=your-secret-key
+PRIVATE_BASE_URL=https://your-company.com/api/v1
+# 如不设置 MODELS，系统会自动从 /v1/models 获取
+```
+
+3. **多个第三方提供商**：
+
+```env
+PROVIDER_A_API_KEY=key-a
+PROVIDER_A_BASE_URL=https://provider-a.com/v1
+PROVIDER_A_WEIGHT=2
+
+PROVIDER_B_API_KEY=key-b
+PROVIDER_B_BASE_URL=https://provider-b.com/v1
+PROVIDER_B_WEIGHT=1
+```
+
+##### 注意事项
+
+- 必须同时配置 `{PROVIDER_NAME}_API_KEY` 和 `{PROVIDER_NAME}_BASE_URL`，系统才会将其识别为 OpenAI 兼容提供商
+- 系统会自动尝试从 `/v1/models` 端点获取模型列表（如果 MODELS 未设置）
+- 如果模型获取失败，该提供商会被跳过（必须至少配置一个模型或能够成功获取）
+- 支持所有 OpenAI 兼容的参数（weight、timeout、enabled 等）
 
 ### 多账号配置
 

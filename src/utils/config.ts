@@ -37,9 +37,11 @@ export class Config {
     ];
 
     const providerPromises: Promise<void>[] = [];
+    const loadedPrefixes = new Set<string>();
 
     providerTypes.forEach(type => {
       const envPrefix = type.toUpperCase().replace(/\./g, '_');
+      loadedPrefixes.add(envPrefix);
       const apiKey = process.env[`${envPrefix}_API_KEY`];
       
       if (apiKey) {
@@ -56,7 +58,124 @@ export class Config {
       }
     });
 
+    // Load generic OpenAI-compatible providers
+    // Scan for any {PREFIX}_API_KEY and {PREFIX}_BASE_URL pattern
+    providerPromises.push(...this.loadGenericOpenAICompatibleProviders(loadedPrefixes));
+
     await Promise.all(providerPromises);
+  }
+
+  private loadGenericOpenAICompatibleProviders(loadedPrefixes: Set<string>): Promise<void>[] {
+    const providerPromises: Promise<void>[] = [];
+    const processedPrefixes = new Set<string>();
+
+    // Reserved env var prefixes that should not be treated as provider names
+    const reservedPrefixes = new Set([
+      'API_KEY',
+      'API',
+      'NODE',
+      'NPM',
+      'PATH',
+      'HOME',
+      'USER',
+      'LANG',
+      'PWD',
+      'SHELL',
+      'TEMP',
+      'TMP',
+      'LOG_LEVEL',
+      'DEFAULT',
+      'MAX',
+      'MODEL',
+      'MODERATION',
+    ]);
+
+    // Get all environment variable keys
+    const envKeys = Object.keys(process.env);
+
+    // Find all {PREFIX}_API_KEY patterns
+    envKeys.forEach(key => {
+      if (!key.endsWith('_API_KEY')) return;
+
+      const apiKey = process.env[key];
+      if (!apiKey) return;
+
+      // Extract the prefix (everything before _API_KEY)
+      const prefix = key.substring(0, key.length - 8); // Remove '_API_KEY'
+
+      // Skip if we've already processed this prefix or it's a known provider
+      if (processedPrefixes.has(prefix) || loadedPrefixes.has(prefix)) return;
+
+      // Skip if this is a numbered suffix like OPENAI_1, OPENAI_2, etc. for known providers
+      const match = prefix.match(/^(.+?)_\d+$/);
+      if (match && loadedPrefixes.has(match[1])) return;
+
+      // Skip reserved prefixes
+      if (reservedPrefixes.has(prefix)) return;
+
+      processedPrefixes.add(prefix);
+
+      // Check if this looks like a generic OpenAI-compatible provider
+      const baseUrl = process.env[`${prefix}_BASE_URL`];
+      if (baseUrl) {
+        // This is a generic OpenAI-compatible provider
+        providerPromises.push(
+          this.loadGenericProviderConfig('openai', prefix, apiKey, baseUrl, null)
+        );
+      }
+    });
+
+    return providerPromises;
+  }
+
+  private async loadGenericProviderConfig(
+    type: ProviderType,
+    envPrefix: string,
+    apiKey: string,
+    baseUrl: string,
+    index: number | null
+  ) {
+    const suffix = index ? `_${index}` : '';
+    const name = index ? `${envPrefix.toLowerCase()}-${index}` : envPrefix.toLowerCase();
+
+    const modelsStr = process.env[`${envPrefix}${suffix}_MODELS`] || '';
+    let models = modelsStr.split(',').map(m => m.trim()).filter(Boolean);
+
+    // Auto-fetch models if not specified but BASE_URL is provided
+    if (models.length === 0) {
+      logger.info(`Auto-fetching models for ${name}...`);
+      try {
+        const fetchedModels = await BaseProvider.fetchAvailableModels(
+          'openai', // Always use openai as the type for generic OpenAI-compatible providers
+          apiKey,
+          baseUrl
+        );
+
+        if (fetchedModels.length > 0) {
+          models = fetchedModels;
+          logger.info(`Successfully fetched ${fetchedModels.length} models for ${name}`);
+        } else {
+          logger.warn(`No models found for ${name}, provider will be skipped`);
+        }
+      } catch (error) {
+        logger.error(`Failed to auto-fetch models for ${name}:`, error);
+      }
+    }
+
+    // Only add provider if it has models
+    if (models.length > 0) {
+      const config: ProviderConfig = {
+        name,
+        type: 'openai', // Always use openai type for generic OpenAI-compatible providers
+        apiKey,
+        baseUrl,
+        models,
+        weight: parseInt(process.env[`${envPrefix}${suffix}_WEIGHT`] || '1'),
+        enabled: process.env[`${envPrefix}${suffix}_ENABLED`] !== 'false',
+        timeout: parseInt(process.env[`${envPrefix}${suffix}_TIMEOUT`] || '120000'),
+      };
+      this.providers.push(config);
+    }
   }
 
   private async loadProviderConfig(
