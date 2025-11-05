@@ -197,7 +197,21 @@ export abstract class BaseProvider {
         error: {
           message: 'Request timeout',
           type: 'timeout_error',
-          code: 'timeout',
+          code: 504,
+        },
+      };
+    }
+
+    // If error is already in the standard format {error: {...}}, return it as-is
+    if (error.error && typeof error.error === 'object') {
+      const errorObj = error.error;
+      // Ensure we have a code (status code) in the error
+      const code = errorObj.code || 500;
+      throw {
+        error: {
+          message: errorObj.message || 'Unknown error',
+          type: errorObj.type || 'api_error',
+          code: code,
         },
       };
     }
@@ -216,6 +230,7 @@ export abstract class BaseProvider {
       error: {
         message: error.message || 'Unknown error',
         type: 'provider_error',
+        code: 500,
       },
     };
   }

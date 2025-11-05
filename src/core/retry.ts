@@ -108,7 +108,7 @@ export class RetryManager {
           error: {
             message: `Request timeout after ${timeout}ms`,
             type: 'timeout_error',
-            code: 'timeout',
+            code: 504,
           },
         });
       }, timeout);
